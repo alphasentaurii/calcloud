@@ -36,7 +36,6 @@ def list_messages(bucket_name):
         msg = m.split("-")[0]
         if msg == "processing":
             n_running += 1
-    print(f"Found {len(messages)} messages.")
 
     return messages, n_running
 
@@ -46,6 +45,7 @@ def list_jobs(messages):
     n_errors = 0
     n_ingested = 0
     n_processed = 0
+    n_running = 0
 
     for m in messages:
         msg = m.split("-")[0]
@@ -60,20 +60,24 @@ def list_jobs(messages):
             ipst = ipst.split(".")[0]
             succeeded.append(ipst)
             n_processed += 1
-        elif msg == "processing":
-            processing.append(ipst)
         else:
-            continue
+            processing.append(ipst)
+            n_running += 1
 
+    msg_count = n_errors + n_ingested + n_processed + n_running
+    print(f"Found {msg_count} completed job messages.")
     print(f"Found {n_errors} error messages.")
     print(f"Found {n_ingested} ingested jobs.")
     print(f"Found {n_processed} processed jobs.")
-    print(f"Jobs still running: {len(processing)}")
+    print(f"Jobs still running: {n_running}")
     print(f"Total # successful jobs: {len(succeeded)}")
 
-    job_dict = {"succeeded": succeeded, "processing": processing, "errors": errors}
-
-    return job_dict
+    if len(succeeded) < 1:
+        print("No data found for ingest - exiting program.")
+        sys.exit()
+    else:
+        job_dict = {"succeeded": succeeded, "processing": processing, "errors": errors}
+        return job_dict
 
 
 def scrape_jobs(bucket_proc, bucket_mod, prefix):
@@ -82,7 +86,7 @@ def scrape_jobs(bucket_proc, bucket_mod, prefix):
     messages, n_running = list_messages(bucket_proc)
     if n_running > 0:
         print(f"Warning: {n_running} jobs are still processing.")
-    jobs = list_jobs(messages)
+    jobs = list_jobs(messages)    
     job_dict = {"jobs": jobs}
     keys = io.save_to_file(job_dict)
     io.s3_upload(keys, bucket_mod, prefix)
@@ -535,7 +539,7 @@ if __name__ == "__main__":
     os.chdir(prefix)
     print("URIs: ", bucket_mod, bucket_proc, log_group)
     print("OPTIONS: ", scrapetime, hr_delta, mins)
-    print(f"Scraping {scrape} to {prefix}")
+    print(f"Scraping {scrape} to {prefix}")    
     if scrape == "all":
         F, T, P = scrape_all(bucket_mod, bucket_proc, prefix, log_group, t0, mins)
     elif scrape == "features":
